@@ -4,6 +4,5 @@ Members: Piyush Sahani @piyuPV,
          Viraj Wadke @obitojod, 
          Suvith Shetty @suvith-24
 
-Building a pipeline for processing and understanding audio
-resources on Sandalwood cultivation
+#Building a pipeline for processing and understanding audio resources on Sandalwood cultivation
 
