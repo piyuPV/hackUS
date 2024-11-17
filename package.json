@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "expo-av": "^15.0.1",
+    "react-native-audio-record": "^0.2.2"
+  }
+}
