@@ -8,11 +8,13 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
-  ActivityIndicator
+  ActivityIndicator,
 } from 'react-native';
 import { FontAwesome } from '@expo/vector-icons';
 import { Audio } from 'expo-av'; // For audio recording
 import * as FileSystem from 'expo-file-system'; // For handling file storage
+import * as Speech from 'expo-speech'; // For text-to-speech
+import axios from 'axios'; // For making HTTP requests
 
 export default function App() {
   const [text, setText] = useState('');
@@ -22,28 +24,22 @@ export default function App() {
 
   // Function to clean the response text
   const cleanText = (text) => {
-    // Remove markdown formatting: bold, italics, headers, etc.
     let cleanedText = text.replace(/(\*\*|__)(.*?)\1/g, '$2'); // Remove bold/italic
     cleanedText = cleanedText.replace(/#{1,6}\s*(.*?)\s*#{1,6}/g, '$1'); // Remove headers (e.g., ### Header)
     cleanedText = cleanedText.replace(/^-{3,}/g, ''); // Remove horizontal lines
     cleanedText = cleanedText.replace(/\[(.*?)\]\(.*?\)/g, '$1'); // Remove links
-    
-    // Remove Unicode escape sequences (e.g., \u20b9 for currency symbol)
-    cleanedText = cleanedText.replace(/\\u[0-9A-Fa-f]{4}/g, '');
-
-    // Remove extra spaces, newlines, and other special characters
+    cleanedText = cleanedText.replace(/\\u[0-9A-Fa-f]{4}/g, ''); // Remove Unicode escape sequences
     cleanedText = cleanedText.replace(/[\n\r\t]+/g, ' '); // Remove line breaks and tabs
     cleanedText = cleanedText.replace(/\s{2,}/g, ' '); // Replace multiple spaces with a single space
-
     return cleanedText.trim(); // Trim extra spaces at the beginning and end
   };
 
   const handleSend = async () => {
-    if (text.trim() === '') return; // Avoid sending empty queries
+    if (text.trim() === '') return;
     setIsLoading(true);
 
     try {
-      const res = await fetch('http://192.168.0.100:5000/query', { // Replace with your backend IP
+      const res = await fetch('https://demuna.pythonanywhere.com/query', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -54,18 +50,17 @@ export default function App() {
       const responseText = await res.text();
       console.log('Raw Response:', responseText);
 
-      // Clean the response text to remove unwanted characters
       const cleanedResponse = cleanText(responseText);
 
       try {
         const data = JSON.parse(cleanedResponse);
-        setQueryResponse(prevResponses => [
+        setQueryResponse((prevResponses) => [
           ...prevResponses,
           { query: text, response: data.response },
         ]);
       } catch (error) {
         console.error('Error parsing JSON:', error);
-        setQueryResponse(prevResponses => [
+        setQueryResponse((prevResponses) => [
           ...prevResponses,
           { query: text, response: 'Failed to parse server response.' },
         ]);
@@ -74,7 +69,7 @@ export default function App() {
       setText('');
     } catch (error) {
       console.error('Error:', error);
-      setQueryResponse(prevResponses => [
+      setQueryResponse((prevResponses) => [
         ...prevResponses,
         { query: text, response: 'Failed to connect to the backend.' },
       ]);
@@ -86,12 +81,10 @@ export default function App() {
 
   const handleAudioInput = async () => {
     if (recording) {
-      // Stop recording
       await recording.stopAndUnloadAsync();
       const uri = recording.getURI();
       console.log('Recording stopped and stored at', uri);
 
-      // Transcribe audio
       try {
         const transcription = await transcribeAudio(uri);
         setText(transcription);
@@ -102,12 +95,14 @@ export default function App() {
 
       setRecording(null);
     } else {
-      // Start recording
       try {
         console.log('Requesting permissions..');
         const permission = await Audio.requestPermissionsAsync();
         if (!permission.granted) {
-          Alert.alert('Permission Denied', 'Please grant microphone permission to record audio.');
+          Alert.alert(
+            'Permission Denied',
+            'Please grant microphone permission to record audio.'
+          );
           return;
         }
 
@@ -129,27 +124,53 @@ export default function App() {
         encoding: FileSystem.EncodingType.Base64,
       });
 
-      // Use your ASR API here (e.g., Google Speech-to-Text, OpenAI Whisper)
       const res = await fetch('YOUR_ASR_API_ENDPOINT', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: 'Bearer YOUR_API_KEY', // Replace with your API key
+          Authorization: 'Bearer YOUR_API_KEY',
         },
         body: JSON.stringify({
           audio: file,
-          language: 'kn-IN', // Kannada language code
+          language: 'kn-IN',
         }),
       });
 
       const data = await res.json();
       console.log('Transcription response:', data);
 
-      // Assuming the API returns transcribed text in `data.text`
       return data.text || 'No transcription available';
     } catch (error) {
       console.error('Error during transcription:', error);
       throw error;
+    }
+  };
+
+  // Function to translate text from English to Kannada
+  const translateToKannada = async (text) => {
+    try {
+      const response = await axios.post('https://libretranslate.com/translate', {
+        q: text,
+        source: 'en',
+        target: 'kn',
+        format: 'text',
+      });
+
+      return response.data.translatedText;
+    } catch (error) {
+      console.error('Translation Error:', error);
+      return text; // Fallback to the original text if translation fails
+    }
+  };
+
+  const speakResponse = async (text, language = 'en-US') => {
+    if (language === 'kn-IN') {
+      // Translate text to Kannada if language is Kannada
+      const translatedText = await translateToKannada(text);
+      Speech.speak(translatedText, { language: 'kn-IN' });
+    } else {
+      // Speak in English
+      Speech.speak(text, { language });
     }
   };
 
@@ -164,6 +185,22 @@ export default function App() {
             <Text style={styles.responseText}>
               Response: {item.response}
             </Text>
+            <View style={styles.speakerButtons}>
+              <TouchableOpacity
+                style={styles.speakerButton}
+                onPress={() => speakResponse(item.response, 'en-US')}
+              >
+                <FontAwesome name="volume-up" size={20} color="white" />
+                <Text style={styles.speakerButtonText}>English</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.speakerButton}
+                onPress={() => speakResponse(item.response, 'kn-IN')}
+              >
+                <FontAwesome name="volume-up" size={20} color="white" />
+                <Text style={styles.speakerButtonText}>Kannada</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         ))}
       </ScrollView>
@@ -177,7 +214,11 @@ export default function App() {
           onChangeText={setText}
         />
         <TouchableOpacity style={styles.audioButton} onPress={handleAudioInput}>
-          <FontAwesome name={recording ? "stop" : "microphone"} size={24} color="white" />
+          <FontAwesome
+            name={recording ? 'stop' : 'microphone'}
+            size={24}
+            color="white"
+          />
         </TouchableOpacity>
       </View>
 
@@ -215,41 +256,51 @@ const styles = StyleSheet.create({
   },
   responseText: {
     fontSize: 16,
-    color: '#D4D4D6',
+    color: 'lightgray',
+    marginBottom: 10,
+  },
+  speakerButtons: {
+    flexDirection: 'row',
+  },
+  speakerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#3A3A4B',
+    padding: 10,
+    borderRadius: 5,
+    marginRight: 10,
+  },
+  speakerButtonText: {
+    color: 'white',
+    marginLeft: 5,
+    fontSize: 14,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
-    backgroundColor: '#2A2A3C',
-    borderRadius: 10,
-    paddingHorizontal: 10,
+    marginBottom: 20,
   },
   input: {
     flex: 1,
-    height: 50,
+    backgroundColor: '#3A3A4B',
+    color: 'white',
+    padding: 10,
+    borderRadius: 5,
+    marginRight: 10,
+  },
+  sendButton: {
+    backgroundColor: '#4CAF50',
+    padding: 15,
+    borderRadius: 5,
+    alignItems: 'center',
+  },
+  sendButtonText: {
     color: 'white',
     fontSize: 16,
   },
   audioButton: {
-    marginLeft: 10,
-    backgroundColor: '#3C3C4E',
+    backgroundColor: '#FF5722',
     padding: 10,
-    borderRadius: 25,
-  },
-  sendButton: {
-    height: 50,
-    backgroundColor: '#4C8BF5',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 10,
-  },
-  sendButtonText: {
-    fontSize: 18,
-    color: 'white',
-    fontWeight: 'bold',
-  },
-  highlight: {
-    color: '#FFD700',
+    borderRadius: 5,
   },
 });
