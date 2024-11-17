@@ -20,6 +20,24 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [recording, setRecording] = useState(null);
 
+  // Function to clean the response text
+  const cleanText = (text) => {
+    // Remove markdown formatting: bold, italics, headers, etc.
+    let cleanedText = text.replace(/(\*\*|__)(.*?)\1/g, '$2'); // Remove bold/italic
+    cleanedText = cleanedText.replace(/#{1,6}\s*(.*?)\s*#{1,6}/g, '$1'); // Remove headers (e.g., ### Header)
+    cleanedText = cleanedText.replace(/^-{3,}/g, ''); // Remove horizontal lines
+    cleanedText = cleanedText.replace(/\[(.*?)\]\(.*?\)/g, '$1'); // Remove links
+    
+    // Remove Unicode escape sequences (e.g., \u20b9 for currency symbol)
+    cleanedText = cleanedText.replace(/\\u[0-9A-Fa-f]{4}/g, '');
+
+    // Remove extra spaces, newlines, and other special characters
+    cleanedText = cleanedText.replace(/[\n\r\t]+/g, ' '); // Remove line breaks and tabs
+    cleanedText = cleanedText.replace(/\s{2,}/g, ' '); // Replace multiple spaces with a single space
+
+    return cleanedText.trim(); // Trim extra spaces at the beginning and end
+  };
+
   const handleSend = async () => {
     if (text.trim() === '') return; // Avoid sending empty queries
     setIsLoading(true);
@@ -36,8 +54,11 @@ export default function App() {
       const responseText = await res.text();
       console.log('Raw Response:', responseText);
 
+      // Clean the response text to remove unwanted characters
+      const cleanedResponse = cleanText(responseText);
+
       try {
-        const data = JSON.parse(responseText);
+        const data = JSON.parse(cleanedResponse);
         setQueryResponse(prevResponses => [
           ...prevResponses,
           { query: text, response: data.response },

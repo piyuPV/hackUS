@@ -36,7 +36,7 @@ def query():
     query = data.get("query")
     if not query:
         return jsonify({"error": "Query not provided"}), 400
-    result = op(query)
+    result = op(query + " answer this with considering Sandalwood cultivation in benguluru India also start direct with answer no need to of unnecessary text")
     return jsonify({"Query": query, "response": result})
 
 if __name__ == '__main__':
