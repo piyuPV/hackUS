@@ -6,7 +6,7 @@ app = Flask(__name__)
 # Initialize the OpenAI client
 client = OpenAI(
     base_url="https://integrate.api.nvidia.com/v1",
-    api_key="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"
+    api_key="Enter_the_API_KEY"
 )
 
 # Define the operation function
